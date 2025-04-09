@@ -33,3 +33,35 @@ cd CubeSystemTreePlugin
 
 # Build and install steps depend on your integration with CubeGUI.
 # You can use qmake, cmake, or integrate it directly with Cube's build system.
+
+## 📄 Expected JSON Structure
+
+The plugin expects a JSON file named `system_tree.json` with the following structure:
+
+```json
+{
+  "nodes": [
+    {
+      "name": "Root Node",
+      "description": "This is the root of the system tree.",
+      "children": [
+        {
+          "name": "Child Node 1",
+          "description": "First child node",
+          "children": []
+        },
+        {
+          "name": "Child Node 2",
+          "description": "Second child node",
+          "children": [
+            {
+              "name": "Grandchild Node",
+              "description": "A node under Child Node 2"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+Each node in the JSON can optionally contain a "children" array to define sub-nodes, allowing for a recursive system tree structure.
