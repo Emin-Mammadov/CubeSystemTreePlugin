@@ -1,13 +1,13 @@
 // SystemTreePlugin.cpp
 #include <CubePlugin.h>
-#include <QJsonDocument>
+#include <Cube.h>
+#include <CubeSystemTreeNode.h>
+#include <QTextEdit>
+#include <QVBoxLayout>
+#include <QWidget>
 #include <QJsonObject>
 #include <QJsonArray>
-#include <QFile>
-#include <QVBoxLayout>
-#include <QTreeWidget>
-#include <QTreeWidgetItem>
-#include <QWidget>
+#include <QJsonDocument>
 #include <QDebug>
 
 class SystemTreePlugin : public cubepluginapi::CubePlugin {
@@ -15,74 +15,49 @@ public:
     SystemTreePlugin() : CubePlugin() {}
 
     virtual void show() override {
-        // Try to open the JSON file
-        QFile file("system_tree.json");
-        if (!file.open(QIODevice::ReadOnly)) {
-            qWarning("Couldn't open the JSON file.");
+        cube::Cube* cube = getCube();  // Get the active .cubex cube handle
+        if (!cube) {
+            qWarning("No cube data available.");
             return;
         }
 
-        // Read and parse the JSON data
-        QByteArray jsonData = file.readAll();
-        QJsonDocument jsonDoc = QJsonDocument::fromJson(jsonData);
-        if (jsonDoc.isNull()) {
-            qWarning("Invalid JSON data.");
-            return;
-        }
+        const std::vector<cube::SystemTreeNode*>& roots = cube->getSystemTree();  // Root system nodes
+        QJsonArray jsonTree = convertSystemTreeToJson(roots);
+        QJsonObject wrappedJson;
+        wrappedJson["nodes"] = jsonTree;
+        QJsonDocument doc(wrappedJson);
+        QString prettyJson = doc.toJson(QJsonDocument::Indented);
 
-        QJsonObject jsonObject = jsonDoc.object();
+        // Create scrollable widget to show JSON
+        QTextEdit* jsonView = new QTextEdit();
+        jsonView->setText(prettyJson);
+        jsonView->setReadOnly(true);
 
-        // Setup the GUI elements
-        QWidget* treeWidgetContainer = new QWidget();
+        QWidget* container = new QWidget();
         QVBoxLayout* layout = new QVBoxLayout();
-        QTreeWidget* treeWidget = new QTreeWidget();
-        treeWidget->setHeaderLabels(QStringList() << "Node Name" << "Description");
+        layout->addWidget(jsonView);
+        container->setLayout(layout);
 
-        // Populate the tree view using the JSON object
-        visualizeSystemTree(jsonObject, treeWidget);
-
-        layout->addWidget(treeWidget);
-        treeWidgetContainer->setLayout(layout);
-
-        // Add the container as a new tab in CubeGUI using the defined SYSTEM type
-        service->addTab(SYSTEM, treeWidgetContainer);
+        service->addTab(SYSTEM, container);  // SYSTEM tab for system tree
     }
 
 private:
-    // Create the tree widget items from the JSON "nodes" array.
-    void visualizeSystemTree(const QJsonObject& jsonObject, QTreeWidget* treeWidget) {
-        if (!jsonObject.contains("nodes") || !jsonObject["nodes"].isArray()) {
-            qWarning("Invalid system tree structure.");
-            return;
-        }
+    QJsonArray convertSystemTreeToJson(const std::vector<cube::SystemTreeNode*>& nodes) {
+        QJsonArray jsonArray;
+        for (const cube::SystemTreeNode* node : nodes) {
+            QJsonObject obj;
+            obj["name"] = QString::fromStdString(node->getName());
+            obj["type"] = QString::fromStdString(node->getTypeAsString());
+            obj["id"] = static_cast<int>(node->getId());
 
-        QJsonArray nodes = jsonObject["nodes"].toArray();
-        for (const QJsonValue &nodeValue : nodes) {
-            QJsonObject node = nodeValue.toObject();
-            QTreeWidgetItem* item = new QTreeWidgetItem(treeWidget);
-            item->setText(0, node["name"].toString());
-            item->setText(1, node["description"].toString());
-
-            if (node.contains("children") && node["children"].isArray()) {
-                QJsonArray children = node["children"].toArray();
-                addChildrenToItem(children, item);
+            const std::vector<cube::SystemTreeNode*>& children = node->getChildren();
+            if (!children.empty()) {
+                obj["children"] = convertSystemTreeToJson(children);
             }
-        }
-    }
 
-    // Recursively add child nodes to the given parent item.
-    void addChildrenToItem(const QJsonArray& children, QTreeWidgetItem* parentItem) {
-        for (const QJsonValue &childValue : children) {
-            QJsonObject childNode = childValue.toObject();
-            QTreeWidgetItem* childItem = new QTreeWidgetItem(parentItem);
-            childItem->setText(0, childNode["name"].toString());
-            childItem->setText(1, childNode["description"].toString());
-
-            if (childNode.contains("children") && childNode["children"].isArray()) {
-                QJsonArray grandchildren = childNode["children"].toArray();
-                addChildrenToItem(grandchildren, childItem);
-            }
+            jsonArray.append(obj);
         }
+        return jsonArray;
     }
 };
 
